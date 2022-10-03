@@ -51,9 +51,7 @@ const main = async () => {
     process.env.BASE_DIR == undefined &&
     process.env.NODE_ENV !== "development"
   ) {
-    console.log(
-      "BASE DIR ISN'T SET. USING DEFAULT /root/project"
-    );
+    console.log("BASE DIR ISN'T SET. USING DEFAULT /root/project");
     process.env.BASE_DIR =
       process.env.NODE_ENV === "production"
         ? "/root/project"
@@ -104,12 +102,15 @@ const main = async () => {
       )
     ) {
       console.log("RUNNING COLLECTION SPECIFIC LOGIN FUNCTION");
-      const collection_login = require(path.resolve(
-        __dirname,
+      const collection_specific_login_path = path.resolve(
+        process.env.COLLECTIONS_DIR,
         "collections",
         `${collection_name}.login.js`
-      ));
-      await collection_login();
+      );
+      if (fs.existsSync(collection_specific_login_path)) {
+        const collection_login = require(collection_specific_login_path);
+        await collection_login();
+      }
     }
     let options = {
       collection: require(path.resolve(
@@ -145,7 +146,12 @@ const main = async () => {
       summary.run.executions.map((el) => {
         if (el.assertions) {
           el.assertions.map(
-            ({ error }) => error && fail({ name: el.item.name, message: JSON.stringify(error, null, 2) })
+            ({ error }) =>
+              error &&
+              fail({
+                name: el.item.name,
+                message: JSON.stringify(error, null, 2),
+              })
           );
         }
         if (el.request.url.path.includes("j_security_check")) {
@@ -160,14 +166,13 @@ const main = async () => {
         } else {
           fail({ name: el.item.name, message: "response did not return 200" });
 
-
           // console.log("error")
         }
       });
 
       if (process.env.WEBEX_SUCCESS_HOOK == "true") {
-        console.log("SENDING WEBEX SUCCESS HOOK")
-        const result= webex.messages.create({
+        console.log("SENDING WEBEX SUCCESS HOOK");
+        const result = webex.messages.create({
           text: `**Pipeline passed**\n
 BUILD URL: ${process.env.CIRCLE_BUILD_URL}
 BRANCH NAME: ${process.env.CIRCLE_BRANCH}
@@ -175,7 +180,7 @@ CIRCLE_JOB: ${process.env.CIRCLE_JOB}
 `,
           roomId: process.env.WEBEX_ROOM_ID,
         });
-        console.log(result)
+        console.log(result);
       }
       await p2();
     });

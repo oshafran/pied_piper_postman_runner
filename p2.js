@@ -247,11 +247,6 @@ const main = async () => {
               el.value,
           };
         }
-        if (el.key.includes("vmanage")) {
-          return {
-            [el.key]: "https://example.com",
-          };
-        }
         return {
           [el.key]: "",
         };
