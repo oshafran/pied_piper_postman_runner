@@ -73,3 +73,5 @@ sdk_python
 collections
 .env
 openapi/
+postman-collection-test.json
+vmanageapi.json
