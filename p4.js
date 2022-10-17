@@ -201,6 +201,8 @@ const substitueENVVariables = () => {
 
 const main = async () => {
 
+  process.env.VMANAGEIP = `https://${process.env.VMANAGEIP}`
+
   console.log("VMANAGE IP IS: ", process.env.VMANAGEIP)
   substitueENVVariables();
 
@@ -217,7 +219,7 @@ const main = async () => {
     throw new Error(e)
   }
 };
-
+module.exports = main;
 if (require.main === module) {
   main();
 }
