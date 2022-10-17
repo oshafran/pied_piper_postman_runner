@@ -1,2 +1,2 @@
-npm install
-node index.js
+yarn install
+node /root/index.js
