@@ -12,4 +12,4 @@ RUN git config --global user.name "piedPiperBot"
 RUN npm install @openapitools/openapi-generator-cli -g
 RUN openapi-generator-cli version
 RUN openapi-generator-cli version-manager set 6.1.0
-CMD ["node", "/root"]
+CMD ["node", "/root/p4.js"]

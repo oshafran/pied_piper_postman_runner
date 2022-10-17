@@ -46,7 +46,17 @@ const genericResponseType = ({ result }) => {
     `,
     result
   );
-  console.log(result);
+
+  // result = replaceAll(
+  //   `      parameters:`,
+  //   `      parameters:
+  //       - in: header
+  //         name: X-XSRF-TOKEN
+  //         schema:
+  //           type: string
+  //         required: false`, result)
+  //
+  // console.log(result);
   return result;
 };
 
@@ -153,31 +163,36 @@ const publishPythonPackage = async () => {
   console.log(newVersion);
   if (newVersion.update) {
     execSync(
-      `openapi-generator-cli generate -i ${process.env.BASE_DIR}/openapi/test.openapi.yaml -g python --git-repo-id ${process.env.GIT_REPO_ID_PYTHON} --git-user-id ${process.env.GIT_USER_ID_PYTHON} -o ${process.env.BASE_DIR}/sdk_python --additional-properties="projectName=${package_name},packageVersion=${newVersion.newVersion}"`
+      `openapi-generator-cli generate -i ${process.env.BASE_DIR}/openapi/test.openapi.json -g python --git-repo-id ${process.env.GIT_REPO_ID_PYTHON} --git-user-id ${process.env.GIT_USER_ID_PYTHON} -o ${process.env.BASE_DIR}/sdk_python --additional-properties="projectName=${package_name},packageVersion=${newVersion.newVersion}"`
     );
-    // const rest_file = replaceAll(
-    //   "ssl.CERT_REQUIRED",
-    //   "ssl.CERT_NONE",
-    //   String(
-    //     fs.readFileSync(
-    //       path.resolve(
-    //         process.env.BASE_DIR,
-    //         "sdk_python",
-    //         "openapi_client",
-    //         "rest.py"
-    //       )
-    //     )
-    //   )
-    // );
-    // fs.writeFileSync(
-    //   path.resolve(
-    //     process.env.BASE_DIR,
-    //     "sdk_python",
-    //     "openapi_client",
-    //     "rest.py"
-    //   ),
-    //   rest_file
-    // );
+    const rest_file = replaceAll(
+      `        try:
+            # perform request and return response
+            response_data = self.request(`,
+      `        try:
+            # perform request and return response
+            header_params['Accept'] = '*/*'
+            response_data = self.request(`,
+      String(
+        fs.readFileSync(
+          path.resolve(
+            process.env.BASE_DIR,
+            "sdk_python",
+            "openapi_client",
+            "api_client.py"
+          )
+        )
+      )
+    );
+    fs.writeFileSync(
+      path.resolve(
+        process.env.BASE_DIR,
+        "sdk_python",
+        "openapi_client",
+        "api_client.py"
+      ),
+      rest_file
+    );
 
     publishToGitHubRepo({
       newVersion,
@@ -265,11 +280,6 @@ const main = async () => {
     );
 
     result = genericResponseType({ result });
-
-    fs.writeFileSync(
-      `${process.env.BASE_DIR}/openapi/${collection_name}.openapi.yaml`,
-      result
-    );
 
     // execSync(
     //   "openapi-generator-cli generate -i openapi/test.openapi.yaml -g go -o ${folder}"
