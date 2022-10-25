@@ -1,14 +1,7 @@
-const {
-  TerraformGenerator,
-  Resource,
-  map,
-  fn,
-} = require("terraform-generator");
+const terraformGenerator = require("./terraform");
 
 const main = () => {
-  const tfg = new TerraformGenerator({
-    required_version: ">= 0.13",
-  });
+  terraformGenerator()
 };
 
 module.exports = main;

@@ -89,6 +89,7 @@ const main = async () => {
       process.env[el] = process.env[`${el}_DEFAULT`]
     }
   })
+  console.log(process.env)
   if (
     fs.existsSync(path.resolve(process.env.COLLECTIONS_DIR, "info.login.js"))
   ) {

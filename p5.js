@@ -2,7 +2,7 @@ const fs = require("fs")
 const Converter = require("openapi-to-postmanv2");
 
 const main = async () => {
-  openapiData = fs.readFileSync(`${process.env.OPENAPI_DIR}/openapi/test.openapi.json`, {
+  openapiData = fs.readFileSync(`${process.env.OPENAPI_DIR}/test.openapi.json`, {
     encoding: "UTF8",
   });
   Converter.convert(

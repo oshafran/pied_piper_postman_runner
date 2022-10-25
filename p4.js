@@ -95,7 +95,7 @@ const publishGoPackage = async () => {
   console.log(newVersion);
   if (newVersion.update) {
     execSync(
-      `openapi-generator-cli generate --skip-validate-spec --git-repo-id ${process.env.GIT_REPO_ID_GO} --git-user-id ${process.env.GIT_USER_ID_GO} -i ${process.env.OPENAPI_DIR}/test.openapi.json -g go -o ${process.env.BASE_DIR}/sdk_go --additional-properties="projectName=${package_name},packageVersion=${newVersion.newVersion}"`
+      `openapi-generator-cli generate --skip-validate-spec --git-repo-id ${process.env.GIT_REPO_ID_GO} --git-user-id ${process.env.GIT_USER_ID_GO} -i ${process.env.OPENAPI_DIR}/test.openapi.json -g go -o ${process.env.BASE_DIR}/sdk_go --additional-properties="projectName=${package_name},packageVersion=${newVersion.newVersion},structPrefix=true"`
     );
 
     publishToGitHubRepo({
@@ -207,17 +207,17 @@ const main = async () => {
   substitueENVVariables();
 
 
-  await p5();
-  process.exit(0);
   try {
     await publishGoPackage();
-    await publishPythonPackage();
+    // await publishPythonPackage();
 
 
   } catch (e) {
     console.log(e);
     throw new Error(e)
   }
+
+  await p5();
 };
 module.exports = main;
 if (require.main === module) {
