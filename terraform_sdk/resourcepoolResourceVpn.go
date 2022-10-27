@@ -1,0 +1,140 @@
+
+package sdwan
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"strconv"
+
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	sdwanAPI "github.com/oshafran/pied-piper-openapi-client-go"
+)
+
+var token string;
+var (
+	_ resource.Resource                = &resourcepoolResourceVpnResource{}
+	_ resource.ResourceWithConfigure   = &resourcepoolResourceVpnResource{}
+	_ resource.ResourceWithImportState = &resourcepoolResourceVpnResource{}
+)
+
+func NewResourcepoolResourceVpnResource() resource.Resource {
+	return &resourcepoolResourceVpnResource{}
+}
+
+// vpnSiteListsResource is the data source implementation.
+type resourcepoolResourceVpnResource struct {
+	client *sdwanAPI.APIClient
+}
+type resourcepoolResourceVpnResourceModel struct{
+  ResourcePoolDataType              types.String           `tfsdk:"resourcePoolDataType"`
+  TenantId              types.String           `tfsdk:"tenantId"`
+  TenantVpn              types.Int64           `tfsdk:"tenantVpn"`
+  DeviceVpn              types.Int64           `tfsdk:"deviceVpn"`
+}
+
+func (r *resourcepoolResourceVpnResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	// Retrieve import ID and save to id attribute
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+// Metadata returns the data source type name.
+func (d *resourcepoolResourceVpnResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_resourcepool_resource_vpn"
+}
+
+func (d *resourcepoolResourceVpnResource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
+	return tfsdk.Schema{
+		Description: "Fetches the list of coffees.",
+		Attributes: map[string]tfsdk.Attribute{
+      "resourcePoolDataType": {
+        Description: "",
+        Computed: true,
+        Type: types.String,
+      },
+      "tenantId": {
+        Description: "",
+        Computed: true,
+        Type: types.String,
+      },
+      "tenantVpn": {
+        Description: "",
+        Computed: true,
+        Type: types.Int64,
+      },
+      "deviceVpn": {
+        Description: "",
+        Computed: true,
+        Type: types.Int64,
+      },
+},
+
+func (d *resourcepoolResourceVpnResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var state resourcepoolResourceVpnResourceModel
+	diags := req.State.Get(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get refreshed order value from HashiCups
+
+	_, r, err := d.client.ConfigurationPolicyVPNListBuilderApi.GetListsById39(context.Background(), state.ListID.Value).Execute()
+	dataStr, err := ioutil.ReadAll(r.Body)
+  fmt.Println(string(dataStr))
+	data := map[string]interface{}{}
+	json.Unmarshal(dataStr, &data)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Read HashiCups Coffees",
+			err.Error(),
+		)
+		return
+	}
+
+		resp.Diagnostics.AddWarning(
+			"test",
+			string(dataStr),
+		)
+	// Map response body to model
+
+	vpnSiteList := data
+
+	vpnSiteListState := vpnSiteListResourceModel{
+      ResourcePoolDataType:              types.String{Value: vpnSiteList["key"].(string)}, 
+  TenantId:              types.String{Value: vpnSiteList["key"].(string)}, 
+  TenantVpn:              types.Int64{Value: vpnSiteList["key"].(integer)}, 
+  DeviceVpn:              types.Int64{Value: vpnSiteList["key"].(integer)}, 
+}
+
+	}
+
+	// for _, entry := range vpnSiteList["entries"].([]interface{}) {
+	// 	vpnSiteListState.Entries = append(vpnSiteListState.Entries, vpnSiteListEntries{
+	// 		VPN: types.String{Value: entry["vpn"].(string)},
+	// 	})
+	// }
+
+	// for _, references := range vpnSiteList["references"].([]map[string]interface{}) {
+	// 	vpnSiteListState.References = append(vpnSiteListState.References, vpnSiteListReference{
+	// 		ID:   types.String{Value: references["id"].(string)},
+	// 		Type: types.String{Value: ""},
+	// 	})
+	// }
+
+	state = vpnSiteListState
+
+	// Set state
+	diags = resp.State.Set(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+}

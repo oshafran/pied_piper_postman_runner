@@ -1,4 +1,6 @@
 const replaceall = require("replaceall");
+const fs = require("fs");
+const path = require("path");
 const {
   snakeCase,
   camelCase,
@@ -23,11 +25,11 @@ const buildResource = ({ schema }) => {
     for (const [key, value] of Object.entries(schema.properties)) {
       if (value.type === "array") {
         if (value.items.type === "string") {
-          body += `  ${camelCase(
+          body += `  ${pascalCase(
             key
           )}              []String           \`tfsdk:"${key}"\`\n`;
         } else {
-          body += `  ${camelCase(key)}              []${pascalCase(
+          body += `  ${pascalCase(key)}              []${pascalCase(
             key
           )}Resource           \`tfsdk:"${key}"\`\n`;
           nestedResources +=
@@ -36,7 +38,7 @@ const buildResource = ({ schema }) => {
             "\n";
         }
       } else if (value.type === "object") {
-        body += `  ${camelCase(key)}              ${camelCase(
+        body += `  ${pascalCase(key)}              ${camelCase(
           key
         )}Resource           \`tfsdk:"${key}"\`\n`;
         nestedResources +=
@@ -44,7 +46,7 @@ const buildResource = ({ schema }) => {
           buildResource({ schema: value }) +
           "\n";
       } else {
-        body += `  ${camelCase(key)}              types.${
+        body += `  ${pascalCase(key)}              types.${
           typeMap[value.type]
         }           \`tfsdk:"${key}"\`\n`;
       }
@@ -101,9 +103,108 @@ const resourceAnalyzer = ({ resource }) => {
   return resource_schema;
 };
 
+const stateMapper = ({ schema }) => {
+  let body = ``;
+  let nestedResources = "";
+  if (schema.type === "object") {
+    for (const [key, value] of Object.entries(schema.properties)) {
+      if (value.type === "array") {
+        if (value.items.type === "string") {
+          // body += `  ${pascalCase(
+          //   key
+          // )}              []String           \`tfsdk:"${key}"\`\n`;
+        } else {
+          // body += `  ${pascalCase(key)}              []${pascalCase(
+          //   key
+          // )}Resource           \`tfsdk:"${key}"\`\n`;
+          // nestedResources +=
+          //   `\ntype ${camelCase(key)}Resource struct{\n` +
+          //   buildResource({ schema: value.items }) +
+          //   "\n";
+        }
+      } else if (value.type === "object") {
+        // body += `  ${pascalCase(key)}              ${camelCase(
+        //   key
+        // )}Resource           \`tfsdk:"${key}"\`\n`;
+        // nestedResources +=
+        //   `\ntype ${camelCase(key)}Resource struct{\n` +
+        //   buildResource({ schema: value }) +
+        //   "\n";
+      } else {
+        body += `  ${pascalCase(key)}:              types.${
+          typeMap[value.type]
+        }{Value: vpnSiteList["key"].(${value.type})}, \n`;
+      }
+    }
+  }
+
+  return body + "}\n" + nestedResources;
+}
+
 const resourceGenerator = ({ resource_data }) => {};
 
-const schemaGenerator = ({ schema, path_name }) => {
+const readGenerator = ({ schema, path_name }) => {
+  return `
+func (d *${camelCase(path_name)}Resource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var state ${camelCase(path_name)}ResourceModel
+	diags := req.State.Get(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get refreshed order value from HashiCups
+
+	_, r, err := d.client.ConfigurationPolicyVPNListBuilderApi.GetListsById39(context.Background(), state.ListID.Value).Execute()
+	dataStr, err := ioutil.ReadAll(r.Body)
+  fmt.Println(string(dataStr))
+	data := map[string]interface{}{}
+	json.Unmarshal(dataStr, &data)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Read HashiCups Coffees",
+			err.Error(),
+		)
+		return
+	}
+
+		resp.Diagnostics.AddWarning(
+			"test",
+			string(dataStr),
+		)
+	// Map response body to model
+
+	vpnSiteList := data
+
+	vpnSiteListState := vpnSiteListResourceModel{
+    ${stateMapper({ schema })}
+
+	// for _, entry := range vpnSiteList["entries"].([]interface{}) {
+	// 	vpnSiteListState.Entries = append(vpnSiteListState.Entries, vpnSiteListEntries{
+	// 		VPN: types.String{Value: entry["vpn"].(string)},
+	// 	})
+	// }
+
+	// for _, references := range vpnSiteList["references"].([]map[string]interface{}) {
+	// 	vpnSiteListState.References = append(vpnSiteListState.References, vpnSiteListReference{
+	// 		ID:   types.String{Value: references["id"].(string)},
+	// 		Type: types.String{Value: ""},
+	// 	})
+	// }
+
+	state = vpnSiteListState
+
+	// Set state
+	diags = resp.State.Set(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+}
+`
+}
+
+const schemaGenerator = ({ schema, path_name, custom_ending }) => {
   let body = ``;
   let nestedResources = "";
   if (schema.type === "object") {
@@ -114,37 +215,38 @@ const schemaGenerator = ({ schema, path_name }) => {
             key
           )}              []String           \`tfsdk:"${key}"\`\n`;
         } else {
-          // body += `  ${camelCase(key)}              []${pascalCase(
-          //   key
-          // )}Resource           \`tfsdk:"${key}"\`\n`;
-          // nestedResources +=
-          //   `\ntype ${camelCase(key)}Resource struct{\n` +
-          //   buildResource({ schema: value.items }) +
-          //   "\n";
+          body +=
+            `      "${key}": {\n        Description:"",\n        Computed: true,\n        Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
+\n` +
+            "    " +
+            schemaGenerator({ schema: value.items, path_name, custom_ending: "})," }) +
+            "},\n";
         }
       } else if (value.type === "object") {
-        body += `      "${key}": {\n        Description:"",\n        Computed: true,\n        Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-\n`;
-        nestedResources += "    " +
-          schemaGenerator({ schema: value, path_name }) + ",\n";
+        body +=
+          `      "${key}": {\n        Description:"",\n        Computed: true,\n        Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
+\n` +
+          "    " +
+          schemaGenerator({ schema: value, path_name }) +
+          ",\n";
       } else {
-        body += `      "${key}": {\n        Description: "",\n        Computed: ${schema?.computed?.includes(key) ? "false" : "true"},\n        Type: types.${
-          typeMap[value.type]
-        }\n      },\n`;
+        body += `      "${key}": {\n        Description: "",\n        Computed: ${
+          schema?.computed?.includes(key) ? "false" : "true"
+        },\n        Type: types.${typeMap[value.type]},\n      },\n`;
       }
     }
   }
 
   // console.log(schema);
 
-  return body + "}\n" + nestedResources;
+  return body + (custom_ending ? custom_ending : "},\n") + nestedResources;
 };
 
 const generateEndpoint = ({ open_api_spec }) => {
   let count = 0;
-  for (const [path, path_data] of Object.entries(open_api_spec.paths)) {
-    console.log(path);
-    const path_name = nameGenerator({ path });
+  for (const [url, path_data] of Object.entries(open_api_spec.paths)) {
+    console.log(url);
+    const path_name = nameGenerator({ path: url });
     let endpoint = `
 package sdwan
 
@@ -268,7 +370,7 @@ func (d *${camelCase(
 }
 `;
       // console.log(endpoint);
-      data = `
+      endpoint += `
 func (d *${camelCase(
         path_name
       )}Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
@@ -276,8 +378,17 @@ func (d *${camelCase(
 		Description: "Fetches the list of coffees.",
 		Attributes: map[string]tfsdk.Attribute{
 `;
-      console.log(schemaGenerator({ schema: current_schema, path_name }));
+      endpoint += schemaGenerator({ schema: current_schema, path_name });
 
+      endpoint += readGenerator({ schema: current_schema, path_name })
+      fs.writeFileSync(
+        path.resolve(
+          __dirname,
+          "../terraform_sdk/",
+          `${camelCase(path_name)}.go`
+        ),
+        endpoint
+      );
       // process.exit(0);
     }
   }
