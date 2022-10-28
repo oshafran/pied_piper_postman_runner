@@ -1,0 +1,72 @@
+endpoints:
+  - name: vpnSiteList
+    schema:
+      type: object
+      properties:
+        listId:
+          type: string
+          computed: true
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+        owner:
+          type: string
+        lastUpdated:
+          type: int32
+        referenceCount:
+          type: string
+        readOnly:
+          type: boolean
+        version:
+          type: string
+        infoTag:
+          type: string
+        isActivatedByVsmart:
+          type: boolean
+        entries:
+          type: array
+          items:
+            type: object
+            properties:
+              vpn: string
+    read:
+      - sdkPackage: ConfigurationPolicyVPNListBuilderApi
+        sdkFunction: GetListsById39
+        id: listId
+        script: funcName
+        responseBody:
+          - name
+          - description
+          - listId
+          - lastUpdated
+          - owner
+          - referenceCount
+          - type
+          - readOnly
+          - version
+          - infoTag
+          - isActivatedByVsmart
+
+    create:
+      initialBody:
+        - name
+        - type
+        - entries:
+           - vpn
+      steps:
+      - sdkPackage: ConfigurationPolicyVPNListBuilderApi
+        sdkFunction: CreatePolicyList39
+        preScript: funcName 
+        postScript: funcName
+
+      responseBody:
+        - listId
+    delete: 
+      steps:
+      - sdkPackage: ConfigurationPolicyVPNListBuilderApi
+        sdkFunction: DeletePolicyList39
+        id: listId
+

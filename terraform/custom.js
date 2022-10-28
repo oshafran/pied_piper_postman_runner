@@ -1,6 +1,9 @@
 const replaceall = require("replaceall");
 const fs = require("fs");
 const path = require("path");
+const fse = require("fs-extra");
+YAML = require("yamljs");
+
 const {
   snakeCase,
   camelCase,
@@ -18,6 +21,14 @@ const typeMap = {
   boolean: "Bool",
 };
 
+const typeMapGo = {
+  string: "string",
+  int64: "int",
+  int32: "int",
+  integer: "int",
+  boolean: "bool",
+};
+
 const buildResource = ({ schema }) => {
   let body = ``;
   let nestedResources = "";
@@ -29,7 +40,7 @@ const buildResource = ({ schema }) => {
             key
           )}              []String           \`tfsdk:"${key}"\`\n`;
         } else {
-          body += `  ${pascalCase(key)}              []${pascalCase(
+          body += `  ${pascalCase(key)}              []${camelCase(
             key
           )}Resource           \`tfsdk:"${key}"\`\n`;
           nestedResources +=
@@ -114,15 +125,15 @@ const stateMapper = ({ schema }) => {
           //   key
           // )}              []String           \`tfsdk:"${key}"\`\n`;
         } else {
-          nestedResources +=
-          `
+          nestedResources += `
 
 	for _, entry := range vpnSiteList["${key}"].([]interface{}) {
- 	  vpnSiteListState.${pascalCase(key)} = append(vpnSiteListState.${pascalCase(key)}, vpnSiteList${pascalCase(key)}{
+ 	  vpnSiteListState.${pascalCase(key)} = append(vpnSiteListState.${pascalCase(
+            key
+          )}, vpnSiteList${pascalCase(key)}{
 ${stateMapper({ schema: value.items })})
 	}
-`
-
+`;
         }
       } else if (value.type === "object") {
         // body += `  ${pascalCase(key)}              ${camelCase(
@@ -135,16 +146,15 @@ ${stateMapper({ schema: value.items })})
       } else {
         body += `  ${pascalCase(key)}:              types.${
           typeMap[value.type]
-        }{Value: vpnSiteList["${key}"].(${value.type})}, \n`;
+        }{Value: vpnSiteList["${key}"].(${typeMapGo[value.type]})}, \n`;
       }
     }
   }
 
   return body + "}\n" + nestedResources;
-}
+};
 
-
-const createRequestBodyMapper = ({ schema, root="plan" }) => {
+const createRequestBodyMapper = ({ schema, root = "plan", ending = "" }) => {
   let body = ``;
   let nestedResources = "";
   if (schema.type === "object") {
@@ -155,18 +165,16 @@ const createRequestBodyMapper = ({ schema, root="plan" }) => {
           //   key
           // )}              []String           \`tfsdk:"${key}"\`\n`;
         } else {
-          nestedResources +=
-          `
+          nestedResources += `
 
 	var ${camelCase(key)} []map[string]interface{}
-	for _, item := range plan.${camelCase(key)} {
+	for _, item := range plan.${pascalCase(key)} {
 		entries = append(entries, map[string]interface{}{
     // doing this will cause issues if there are multiple nested values
-      ${createRequestBodyMapper({ schema: value.items, root: "item" })}
-		})
+${createRequestBodyMapper({ schema: value.items, root: "item", ending:"," })}
+		)
 	}
-`
-
+`;
         }
       } else if (value.type === "object") {
         // body += `  ${pascalCase(key)}              ${camelCase(
@@ -181,11 +189,16 @@ const createRequestBodyMapper = ({ schema, root="plan" }) => {
       }
     }
   }
-  return nestedResources + "\n" + (root == "plan" ? `body := map[string]interface{}{\n` : '') + body + "}\n";
-}
+  return (
+    nestedResources +
+    "\n" +
+    (root == "plan" ? `body := map[string]interface{}{\n` : "") +
+    body +
+    "}" + ending + '\n'
+  );
+};
 
-
-const createResponseBodyMapper = ({ schema, root="plan" }) => {
+const createResponseBodyMapper = ({ schema, root = "plan" }) => {
   let body = ``;
   let nestedResources = "";
   if (schema.type === "object") {
@@ -196,8 +209,6 @@ const createResponseBodyMapper = ({ schema, root="plan" }) => {
           //   key
           // )}              []String           \`tfsdk:"${key}"\`\n`;
         } else {
-
-
         }
       } else if (value.type === "object") {
         // body += `  ${pascalCase(key)}              ${camelCase(
@@ -208,20 +219,29 @@ const createResponseBodyMapper = ({ schema, root="plan" }) => {
         //   buildResource({ schema: value }) +
         //   "\n";
       } else {
-        body += `  plan.${pascalCase(key)} = types.String{Value: responseBody["${camelCase(key)}"].(string)}\n`;
+        body += `  plan.${pascalCase(
+          key
+        )} = types.String{Value: responseBody["${camelCase(key)}"].(string)}\n`;
       }
     }
   }
   return nestedResources + "\n" + body + "\n";
-}
+};
 
 const resourceGenerator = ({ resource_data }) => {};
 
-const createGenerator = ({ schema, path_name, response_schema }) => {
+const createGenerator = ({
+  request_schema,
+  response_schema,
+  path_name,
+  steps,
+}) => {
   return `
 
 
-func (r *vpnSiteListsResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (r *${camelCase(
+    path_name
+  )}Resource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	// Retrieve values from plan
 	var plan vpnSiteListResourceModel
 	diags := req.Plan.Get(ctx, &plan)
@@ -232,15 +252,29 @@ func (r *vpnSiteListsResource) Create(ctx context.Context, req resource.CreateRe
 
 	// Generate API request body from plan
 
-  ${createRequestBodyMapper({ schema })}
+  ${createRequestBodyMapper({ schema: request_schema })}
 
   bodyStringed, _ := json.Marshal(&body)
+
+  ${steps
+    .map((el) => {
+      let body = "";
+      if (el.preScript) {
+        body += `//pre-script\n`;
+      }
+      body += `  _, response, err := r.client.${el.sdkPackage}.${el.sdkFunction}(context.Background()).XXSRFTOKEN(token).Body(body).Execute()
+  if err != nil {
+	  fmt.Fprintf(os.Stderr, "Error when calling \`ConfigurationPolicyVPNListBuilderApi.CreatePolicyList39\`: %v\\n", err)
+	  fmt.Fprintf(os.Stderr, "Full HTTP response: %v\\n", r)
+  }\n`;
+      if (el.postScript) {
+        body += `  //post-script`;
+      }
+      return body;
+    })
+    .join("\n")}
   
-	_, response, err := r.client.ConfigurationPolicyVPNListBuilderApi.CreatePolicyList39(context.Background()).XXSRFTOKEN(token).Body(body).Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling \`ConfigurationPolicyVPNListBuilderApi.CreatePolicyList39\`: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-	}
+	
 
 	responseBodyString, _ := ioutil.ReadAll(response.Body)
 	// Create new order
@@ -264,7 +298,7 @@ func (r *vpnSiteListsResource) Create(ctx context.Context, req resource.CreateRe
 
 	// Map response body to schema and populate Computed attribute values
 
-${createResponseBodyMapper({ schema })}
+${createResponseBodyMapper({ schema: response_schema })}
 	// Set state to fully populated data
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -272,20 +306,24 @@ ${createResponseBodyMapper({ schema })}
 		return
 	}
 }
-`
-}
+`;
+};
 
-const updateGenerator =({ schema, path_name }) => {
+const updateGenerator = ({ schema, path_name }) => {
   return `
-func (r *${camelCase(path_name)}Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (r *${camelCase(
+    path_name
+  )}Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	return
 }
-  `
-}
+  `;
+};
 
-const deleteGenerator = ({ schema, path_name }) => {
+const deleteGenerator = ({ steps, path_name }) => {
   return `
-func (r *${camelCase(path_name)}Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (r *${camelCase(
+    path_name
+  )}Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	// Retrieve values from state
 	var state vpnSiteListResourceModel
 	diags := req.State.Get(ctx, &state)
@@ -294,10 +332,17 @@ func (r *${camelCase(path_name)}Resource) Delete(ctx context.Context, req resour
 		return
 	}
 	// Delete existing order
-	_, err := r.client.ConfigurationPolicyVPNListBuilderApi.DeletePolicyList39(context.Background(), state.ListID.Value).Execute()
+${steps
+  .map(
+    ({ sdkPackage, sdkFunction, id }) =>
+      `        _, err := r.client.${sdkPackage}.${sdkFunction}(context.Background(), state.${pascalCase(
+        id
+      )}.Value).Execute()`
+  )
+  .join("\n")}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling \`ConfigurationPolicyVPNListBuilderApi.DeletePolicyList39\`: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+		fmt.Fprintf(os.Stderr, "Error when calling \`ConfigurationPolicyVPNListBuilderApi.DeletePolicyList39\`: %v\\n", err)
+		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\\n", r)
 	}
 
 	if err != nil {
@@ -308,12 +353,14 @@ func (r *${camelCase(path_name)}Resource) Delete(ctx context.Context, req resour
 		return
 	}
 }
-`
-}
+`;
+};
 
 const readGenerator = ({ schema, path_name }) => {
   return `
-func (d *${camelCase(path_name)}Resource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (d *${camelCase(
+    path_name
+  )}Resource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state ${camelCase(path_name)}ResourceModel
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
@@ -323,7 +370,7 @@ func (d *${camelCase(path_name)}Resource) Read(ctx context.Context, req resource
 
 	// Get refreshed order value from HashiCups
 
-	_, r, err := d.client.ConfigurationPolicyVPNListBuilderApi.GetListsById39(context.Background(), state.ListID.Value).Execute()
+	_, r, err := d.client.ConfigurationPolicyVPNListBuilderApi.GetListsById39(context.Background(), state.ListId.Value).Execute()
 	dataStr, err := ioutil.ReadAll(r.Body)
   fmt.Println(string(dataStr))
 	data := map[string]interface{}{}
@@ -357,8 +404,8 @@ func (d *${camelCase(path_name)}Resource) Read(ctx context.Context, req resource
 		return
 	}
 }
-`
-}
+`;
+};
 
 const schemaGenerator = ({ schema, path_name, custom_ending }) => {
   let body = ``;
@@ -375,7 +422,11 @@ const schemaGenerator = ({ schema, path_name, custom_ending }) => {
             `      "${key}": {\n        Description:"",\n        Computed: true,\n        Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
 \n` +
             "    " +
-            schemaGenerator({ schema: value.items, path_name, custom_ending: "})," }) +
+            schemaGenerator({
+              schema: value.items,
+              path_name,
+              custom_ending: "}),",
+            }) +
             "},\n";
         }
       } else if (value.type === "object") {
@@ -398,12 +449,35 @@ const schemaGenerator = ({ schema, path_name, custom_ending }) => {
   return body + (custom_ending ? custom_ending : "},\n") + nestedResources;
 };
 
-const generateEndpoint = ({ open_api_spec }) => {
-  let count = 0;
-  for (const [url, path_data] of Object.entries(open_api_spec.paths)) {
-    console.log(url);
-    const path_name = nameGenerator({ path: url });
-    let endpoint = `
+const schemaBuilder = ({ schema, keys, type = "object" }) => {
+  const new_schema = {};
+  for (const key of keys) {
+    if (typeof key == "string") {
+      new_schema[key] = schema[key];
+    } else if (typeof key == "object") {
+      const new_key = Object.keys(key)[0];
+
+      new_schema[new_key] = schemaBuilder({
+        schema: schema[new_key].items.properties,
+        keys: key[new_key],
+        type: schema[new_key].type,
+      });
+    }
+  }
+  if (type === "array") {
+    return {
+      type,
+      items: {
+        type: "object",
+        properties: new_schema,
+      },
+    };
+  }
+  return { type, properties: new_schema };
+};
+
+const generateEndpoint = ({ path_name, api }) => {
+  let endpoint = `
 package sdwan
 
 import (
@@ -439,119 +513,81 @@ type ${path_name}Resource struct {
 	client *sdwanAPI.APIClient
 }
 `;
-    let current_schema = {};
-    for (const [method, method_data] of Object.entries(path_data)) {
-      // if (method === "get") {
-      if (
-        method_data?.responses["200"]?.content?.["application/json"]?.[
-          "schema"
-        ]?.["$ref"]
-      ) {
-        count++;
-      }
-      if (
-        method_data?.responses["200"]?.content?.["application/json"]?.[
-          "examples"
-        ]
-      ) {
-        for (const [k, v] of Object.entries(
-          method_data?.responses["200"]?.content?.["application/json"]?.[
-            "examples"
-          ]
-        )) {
-          if (
-            typeof v.value === "object" &&
-            !_.isEmpty(v.value) &&
-            v.value?.data === undefined
-          ) {
-            let spec = mockToOpenAPI(v.value);
-            spec = requiredAnalyzer({ schema: spec, method });
 
-            current_schema = _.merge(current_schema, spec);
+  // console.log("current_schema: ", current_schema);
+  endpoint +=
+    `type ${camelCase(path_name)}ResourceModel struct{\n` +
+    buildResource({ schema: api.schema });
 
-            // console.log(v.value);
-            count++;
-            // }
-          }
-        }
-        //
-        if (
-          method_data?.requestBody?.content?.["application/json"]?.["examples"]
-        ) {
-          for (const [k, v] of Object.entries(
-            method_data?.requestBody.content?.["application/json"]?.["examples"]
-          )) {
-            if (
-              typeof v.value === "object" &&
-              !_.isEmpty(v.value) &&
-              v.value?.data === undefined
-            ) {
-              let spec = mockToOpenAPI(v.value);
-              spec = requiredAnalyzer({ schema: spec, method });
-
-              function customizer(objValue, srcValue) {
-                if (_.isArray(objValue)) {
-                  return _.uniq(objValue.concat(srcValue));
-                }
-              }
-              current_schema = _.mergeWith(current_schema, spec, customizer);
-
-              // console.log(v.value);
-              count++;
-              // }
-            }
-          }
-        }
-      }
-    }
-    if (!_.isEmpty(current_schema)) {
-      // console.log("current_schema: ", current_schema);
-      endpoint +=
-        `type ${camelCase(path_name)}ResourceModel struct{\n` +
-        buildResource({ schema: current_schema });
-
-      endpoint += `
+  endpoint += `
 func (r *${camelCase(
-        path_name
-      )}Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+    path_name
+  )}Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Retrieve import ID and save to id attribute
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
 // Metadata returns the data source type name.
 func (d *${camelCase(
-        path_name
-      )}Resource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+    path_name
+  )}Resource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_${snakeCase(path_name)}"
 }
 `;
-      // console.log(endpoint);
-      endpoint += `
+  // console.log(endpoint);
+  endpoint += `
 func (d *${camelCase(
-        path_name
-      )}Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
+    path_name
+  )}Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
 		Description: "Fetches the list of coffees.",
 		Attributes: map[string]tfsdk.Attribute{
 `;
-      endpoint += schemaGenerator({ schema: current_schema, path_name });
+  endpoint += schemaGenerator({ schema: api.schema, path_name }) + "}, nil\n}";
 
-      endpoint += readGenerator({ schema: current_schema, path_name })
-      endpoint += createGenerator({ schema: current_schema, path_name })
-      endpoint += updateGenerator({ schema: current_schema, path_name })
-      endpoint += deleteGenerator({ schema: current_schema, path_name })
-      fs.writeFileSync(
-        path.resolve(
-          __dirname,
-          "../terraform_sdk/",
-          `${camelCase(path_name)}.go`
-        ),
-        endpoint
-      );
-      // process.exit(0);
-    }
-  }
-  console.log(count);
+  console.log(api.read.responseBody);
+  endpoint += readGenerator({
+    schema: schemaBuilder({
+      schema: api.schema.properties,
+      keys: api.read[0].responseBody,
+    }),
+    path_name,
+  });
+
+  endpoint += createGenerator({
+    request_schema: schemaBuilder({
+      schema: api.schema.properties,
+      keys: api.create.initialBody,
+    }),
+    response_schema: schemaBuilder({
+      schema: api.schema.properties,
+      keys: api.create.responseBody,
+    }),
+    path_name,
+    steps: api.create.steps,
+  });
+
+  // endpoint += updateGenerator({ schema: current_schema, path_name });
+  endpoint += deleteGenerator({ steps: api.delete.steps, path_name });
+  console.log(endpoint);
+  fs.writeFileSync(
+    path.resolve(__dirname, "../terraform_sdk/", `${camelCase(path_name)}.go`),
+    endpoint
+  );
+
+  process.exit(0);
+  // process.exit(0);
 };
 
-module.exports =  generateEndpoint;
+const main = () => {
+  const data = YAML.load(path.resolve(__dirname, "./schema.yaml")).endpoints;
+
+  fse.emptyDirSync(path.resolve(__dirname, "../terraform_sdk/"))
+
+  // const data = yamlToJson(fs.readFileSync(path.resolve(__dirname, "./schema.yaml")).toString(), {})
+  for (const api of data) {
+    generateEndpoint({ path_name: api.name, api });
+  }
+};
+
+module.exports = main;

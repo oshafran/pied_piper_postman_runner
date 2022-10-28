@@ -17,6 +17,8 @@
     "replaceall": "^0.1.6",
     "terraform-generator": "^5.2.0",
     "vscode-langservers-extracted": "^4.4.0",
-    "webex": "^2.19.2"
+    "webex": "^2.19.2",
+    "yaml-to-json": "^0.3.0",
+    "yamljs": "^0.3.0"
   }
 }

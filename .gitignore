@@ -75,3 +75,4 @@ collections
 openapi/
 postman-collection-test.json
 vmanageapi.json
+terraform_sdk

@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const generateEndpoint = require("./endpoint");
+const generateCustom = require("./custom");
 
 const generateMain = () => {
 
@@ -27,11 +28,13 @@ func main() {
 
 
 const main = () => {
+  // generateCustom();
   // generateMain();
   // fs.mkdirSync(path.resolve(__dirname, "../", "terraform_sdk/sdwan"));
   const open_api_spec = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../openapi/test.openapi.json")))
 
-  generateEndpoint({ open_api_spec })
+  generateCustom()
+  // generateEndpoint({ open_api_spec })
 
 }
 
