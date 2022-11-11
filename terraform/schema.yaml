@@ -2,71 +2,371 @@ endpoints:
   - name: vpnSiteList
     schema:
       type: object
+      computed: false
       properties:
-        listId:
-          type: string
-          computed: true
-        name:
-          type: string
-        description:
-          type: string
-        type:
-          type: string
-        owner:
-          type: string
-        lastUpdated:
-          type: int32
-        referenceCount:
-          type: string
-        readOnly:
-          type: boolean
-        version:
-          type: string
-        infoTag:
-          type: string
-        isActivatedByVsmart:
-          type: boolean
-        entries:
-          type: array
-          items:
-            type: object
-            properties:
-              vpn: string
+        vpn:
+          type: object
+          properties:
+            listId:
+              type: string
+              computed: true
+            name:
+              type: string
+            description:
+              type: string
+            type:
+              type: string
+            owner:
+              type: string
+              computed: true
+            lastUpdated:
+              type: float 
+              computed: true
+            referenceCount:
+              type: float
+              computed: true
+            readOnly:
+              type: boolean
+              computed: true
+            version:
+              type: string
+              computed: true
+            infoTag:
+              type: string
+              computed: true
+            isActivatedByVsmart:
+              type: boolean
+              computed: true
+            entries:
+              type: array
+              items:
+                type: object
+                properties:
+                  vpn: 
+                    type: string
+        site:
+          computed: false
+          type: object
+          properties:
+            listId:
+              type: string
+              computed: true
+            name:
+              type: string
+            description:
+              type: string
+            type:
+              type: string
+            owner:
+              type: string
+              computed: true
+            lastUpdated:
+              type: float 
+              computed: true
+            referenceCount:
+              type: float
+              computed: true
+            readOnly:
+              type: boolean
+              computed: true
+            version:
+              type: string
+              computed: true
+            infoTag:
+              type: string
+              computed: true
+            isActivatedByVsmart:
+              type: boolean
+              computed: true
+            entries:
+              type: array
+              items:
+                type: object
+                properties:
+                  siteId: 
+                    type: string
+        prefix:
+          type: object
+          computed: false
+          properties:
+            listId:
+              type: string
+              computed: true
+            name:
+              type: string
+            description:
+              type: string
+            type:
+              type: string
+            owner:
+              type: string
+              computed: true
+            lastUpdated:
+              type: float
+              computed: true
+            referenceCount:
+              type: float
+              computed: true
+            readOnly:
+              type: boolean
+              computed: true
+            version:
+              type: string
+              computed: true
+            infoTag:
+              type: string
+              computed: true
+            isActivatedByVsmart:
+              type: boolean
+              computed: true
+            entries:
+              type: array
+              items:
+                type: object
+                properties:
+                  ipPrefix:
+                    type: string
+        control:
+          type: object
+          computed: false
+          properties:
+            definitionId:
+              type: string
+              computed: true
+            name:
+              type: string
+              computed: false
+            type:
+              type: string
+              computed: false
+            description:
+              type: string
+              computed: false
+            defaultAction:
+              type: object
+              computed: false
+              properties:
+                type:
+                  type: string
+                  computed: false
+            sequences:
+              type: array
+              items:
+                type: object
+                properties:
+                  sequenceId: 
+                    type: int32
+                  sequenceName:
+                    type: string
+                  baseAction:
+                    type: string
+                  sequenceType:
+                    type: string
+                  sequenceIpType:
+                    type: string
+                  match:
+                    type: object
+                    properties:
+                      entries:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            field:
+                              type: string
+
     read:
-      - sdkPackage: ConfigurationPolicyVPNListBuilderApi
-        sdkFunction: GetListsById39
-        id: listId
-        script: funcName
-        responseBody:
-          - name
-          - description
-          - listId
-          - lastUpdated
-          - owner
-          - referenceCount
-          - type
-          - readOnly
-          - version
-          - infoTag
-          - isActivatedByVsmart
+      steps:
+        - sdkPackage: ConfigurationPolicyVPNListBuilderApi
+          sdkFunction: GetListsById39
+          id: 
+            $path: "vpn.listId" 
+          responseBody:
+            - name: 
+                $path: "vpn.name"
+            - description: 
+                $path: "vpn.description"
+            - listId: 
+                $path: "vpn.listId"
+            - lastUpdated: 
+                $path: "vpn.lastUpdated"
+            - owner: 
+                $path: "vpn.owner"
+            - referenceCount: 
+                $path: "vpn.referenceCount"
+            - type: 
+                $path: "vpn.type"
+            - readOnly: 
+                $path: "vpn.readOnly"
+            - version: 
+                $path: "vpn.version"
+            - infoTag: 
+                $path: "vpn.infoTag"
+            - isActivatedByVsmart: 
+                $path: "vpn.isActivatedByVsmart"
+        - sdkPackage: ConfigurationPolicySiteListBuilderApi
+          sdkFunction: GetListsById30
+          id: 
+            $path: "site.listId"
+          script: funcName
+          responseBody:
+            - name: 
+                $path: "site.name"
+            - description: 
+                $path: "site.description"
+            - listId: 
+                $path: "site.listId"
+            - lastUpdated: 
+                $path: "site.lastUpdated"
+            - owner: 
+                $path: "site.owner"
+            - referenceCount: 
+                $path: "site.referenceCount"
+            - type: 
+                $path: "site.type"
+            - readOnly: 
+                $path: "site.readOnly"
+            - version: 
+                $path: "site.version"
+            - infoTag: 
+                $path: "site.infoTag"
+            - isActivatedByVsmart:
+                $path: "site.isActivatedByVsmart"
+
+        - sdkPackage: ConfigurationPolicyPrefixListBuilderApi
+          sdkFunction: GetListsById27
+          id: 
+            $path: "prefix.listId"
+          script: funcName
+          responseBody:
+            - name: 
+                $path: "prefix.name"
+            - description: 
+                $path: "prefix.description"
+            - listId: 
+                $path: "prefix.listId"
+            - lastUpdated: 
+                $path: "prefix.lastUpdated"
+            - owner: 
+                $path: "prefix.owner"
+            - referenceCount: 
+                $path: "prefix.referenceCount"
+            - type: 
+                $path: "prefix.type"
+            - readOnly: 
+                $path: "prefix.readOnly"
+            - version: 
+                $path: "prefix.version"
+            - infoTag: 
+                $path: "prefix.infoTag"
+            - isActivatedByVsmart: 
+                $path: "prefix.isActivatedByVsmart"
+        - sdkPackage: ConfigurationPolicyControlDefinitionBuilderApi
+          sdkFunction: GetPolicyDefinition14
+          id: 
+            $path: "control.definitionId"
+          script: funcName
+          responseBody:
+            - name: 
+                $path: "control.name"
+            - description: 
+                $path: "control.description"
+            - definitionId: 
+                $path: "control.definitionId"
+            - type: 
+                $path: "control.type"
+
 
     create:
-      initialBody:
-        - name
-        - type
-        - entries:
-           - vpn
       steps:
       - sdkPackage: ConfigurationPolicyVPNListBuilderApi
         sdkFunction: CreatePolicyList39
-        preScript: funcName 
-        postScript: funcName
+        xsrftoken: true
+        responseBody:
+          - listId: 
+              $path: "vpn.listId"
+        requestBody:
+          - name: 
+              $path: "vpn.name"
+          - type: 
+              $path: "vpn.type"
+          - entries:
+              $path: "vpn.entries"
+              items:
+                - vpn: 
+                    $path: "vpn.entries.vpn"
 
-      responseBody:
-        - listId
+      - sdkPackage: ConfigurationPolicySiteListBuilderApi
+        sdkFunction: CreatePolicyList30
+        responseBody:
+          - listId: 
+              $path: "site.listId"
+        requestBody:
+          - name: 
+              $path: "site.name"
+          - type: 
+              $path: "site.type"
+          - entries:
+              $path: "site.entries"
+              items:
+                - site: 
+                    $path: "site.entries.site"
+      - sdkPackage: ConfigurationPolicyPrefixListBuilderApi
+        sdkFunction: CreatePolicyList27
+        responseBody:
+          - listId: 
+              $path: "prefix.listId"
+        requestBody:
+          - name: 
+              $path: "prefix.name"
+          - type: 
+              $path: "prefix.type"
+          - entries:
+              $path: "prefix.entries"
+              items:
+                - site: 
+                    $path: "prefix.entries.site"
+      - sdkPackage: ConfigurationPolicyControlDefinitionBuilderApi
+        sdkFunction: CreatePolicyDefinition14
+        preScript: CustomControl 
+        responseBody:
+          - definitionId: 
+              $path: "control.definitionId"
+        requestBody:
+          - name: 
+              $path: "control.name"
+          - type: 
+              $path: "control.type"
+          - description: 
+              $path: "control.description"
+                # fix this
+          # - defaultAction:
+          #     $path: "control.defaultAction"
+          #     properties:
+          #       type:
+          #         $path: "control.defaultAction.type"
+          - sequences:
+              $path: "control.sequences"
+              items:
+                - sequenceId: 
+                    $path: "control.sequences.sequenceId"
+
+
     delete: 
       steps:
+      - sdkPackage: ConfigurationPolicyControlDefinitionBuilderApi
+        sdkFunction: DeletePolicyDefinition14
+        id: 
+          $path: "control.definitionId"
       - sdkPackage: ConfigurationPolicyVPNListBuilderApi
         sdkFunction: DeletePolicyList39
-        id: listId
-
+        id: 
+          $path: "vpn.listId"
+      - sdkPackage: ConfigurationPolicySiteListBuilderApi
+        sdkFunction: DeletePolicyList30
+        id: 
+          $path: "site.listId"
+      - sdkPackage: ConfigurationPolicyPrefixListBuilderApi
+        sdkFunction: DeletePolicyList27
+        id: 
+          $path: "prefix.listId"

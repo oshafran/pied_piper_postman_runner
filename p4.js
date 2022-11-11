@@ -9,7 +9,6 @@ const { parseInt } = require("lodash");
 const exec = require("child_process").exec;
 const fse = require("fs-extra");
 const replaceAll = require("replaceall");
-const p5 = require("./p5")
 
 const incrementVersion = (gitCommit = "fix: whatever", currentVersion) => {
   const [major, patch, minor] = currentVersion.split(".");
@@ -139,7 +138,8 @@ const publishPythonPackage = async () => {
   console.log(newVersion);
   if (newVersion.update) {
     execSync(
-      `openapi-generator-cli generate --skip-validate-spec -i ${process.env.OPENAPI_DIR}/test.openapi.json -g python --git-repo-id ${process.env.GIT_REPO_ID_PYTHON} --git-user-id ${process.env.GIT_USER_ID_PYTHON} -o ${process.env.BASE_DIR}/sdk_python --additional-properties="projectName=${package_name},packageVersion=${newVersion.newVersion}"`
+      `openapi-generator-cli generate --skip-validate-spec -i ${process.env.OPENAPI_DIR}/test.openapi.json -g python --git-repo-id ${process.env.GIT_REPO_ID_PYTHON} --git-user-id ${process.env.GIT_USER_ID_PYTHON} -o ${process.env.BASE_DIR}/sdk_python --additional-properties="projectName=${package_name},packageVersion=${newVersion.newVersion}"`,
+      { stdio: 'ignore' }
     );
     const rest_file = replaceAll(
       `        try:
@@ -170,17 +170,18 @@ const publishPythonPackage = async () => {
       rest_file
     );
 
-    publishToGitHubRepo({
-      newVersion,
-      git_repo: `${process.env.GIT_USER_ID_PYTHON}/${process.env.GIT_REPO_ID_PYTHON}`,
-      folder: "sdk_python",
-    });
+    // publishToGitHubRepo({
+    //   newVersion,
+    //   git_repo: `${process.env.GIT_USER_ID_PYTHON}/${process.env.GIT_REPO_ID_PYTHON}`,
+    //   folder: "sdk_python",
+    // });
     execSync(
       `cd ${process.env.BASE_DIR}/sdk_python && python setup.py sdist bdist_wheel`
     );
     execSync(
       `TWINE_PASSWORD="${process.env.TWINE_PASSWORD}" TWINE_USERNAME=${process.env.TWINE_USERNAME} python -m twine upload --skip-existing -r pypi ${process.env.BASE_DIR}/sdk_python/dist/*`
     );
+    console.log("new package published")
 
     // there are actually is a way of modifying through using the package but it takes extra work and so for now whatever
   } else {
@@ -191,35 +192,33 @@ const publishPythonPackage = async () => {
 };
 
 const substitueENVVariables = () => {
-  let openapiData = fs.readFileSync(`${process.env.OPENAPI_DIR}/test.openapi.json`, {
-    encoding: "UTF8",
-  });
+  let openapiData = fs.readFileSync(
+    `${process.env.OPENAPI_DIR}/test.openapi.json`,
+    {
+      encoding: "UTF8",
+    }
+  );
 
   openapiData = replaceAll("{{VMANAGEIP}}", process.env.VMANAGEIP, openapiData);
-  fs.writeFileSync(`${process.env.OPENAPI_DIR}/test.openapi.json`, openapiData)
+  fs.writeFileSync(`${process.env.OPENAPI_DIR}/test.openapi.json`, openapiData);
 };
 
 const main = async () => {
+  process.env.VMANAGEIP = `https://${process.env.VMANAGEIP}`;
 
-  process.env.VMANAGEIP = `https://${process.env.VMANAGEIP}`
-
-  console.log("VMANAGE IP IS: ", process.env.VMANAGEIP)
+  console.log("VMANAGE IP IS: ", process.env.VMANAGEIP);
   substitueENVVariables();
 
-
   try {
-    await publishGoPackage();
-    // await publishPythonPackage();
-
-
+    // await publishGoPackage();
+    await publishPythonPackage();
   } catch (e) {
     console.log(e);
-    throw new Error(e)
+    throw new Error(e);
   }
-
-  await p5();
 };
-module.exports = main;
 if (require.main === module) {
   main();
 }
+
+module.exports = { main, publishToGitHubRepo };

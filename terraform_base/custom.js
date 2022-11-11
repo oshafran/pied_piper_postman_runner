@@ -17,49 +17,65 @@ const typeMap = {
   string: "String",
   int64: "Int64",
   int32: "Int64",
+  float64: "Float64",
+  float32: "Float64",
+  float: "Float64",
   integer: "Int64",
   boolean: "Bool",
 };
 
 const typeMapGo = {
   string: "string",
-  int64: "int",
-  int32: "int",
+  int64: "int64",
+  int32: "int64",
+  float: "float64",
   integer: "int",
   boolean: "bool",
 };
 
-const buildResource = ({ schema }) => {
+const buildResource = ({ schema, prefix = "" }) => {
   let body = ``;
   let nestedResources = "";
   if (schema.type === "object") {
     for (const [key, value] of Object.entries(schema.properties)) {
+      console.log(key);
       if (value.type === "array") {
         if (value.items.type === "string") {
           body += `  ${pascalCase(
             key
-          )}              []String           \`tfsdk:"${key}"\`\n`;
+          )}              []String           \`tfsdk:"${snakeCase(key)}"\`\n`;
         } else {
           body += `  ${pascalCase(key)}              []${camelCase(
-            key
-          )}Resource           \`tfsdk:"${key}"\`\n`;
+            prefix ? prefix + "_" + key : key
+          )}Resource           \`tfsdk:"${snakeCase(key)}"\`\n`;
           nestedResources +=
-            `\ntype ${camelCase(key)}Resource struct{\n` +
-            buildResource({ schema: value.items }) +
+            `\ntype ${camelCase(
+              prefix ? prefix + "_" + key : key
+            )}Resource struct{\n` +
+            buildResource({
+              schema: value.items,
+
+              prefix: prefix ? prefix + "_" + key : key,
+            }) +
             "\n";
         }
       } else if (value.type === "object") {
         body += `  ${pascalCase(key)}              ${camelCase(
-          key
-        )}Resource           \`tfsdk:"${key}"\`\n`;
+          prefix ? prefix + "_" + key : key
+        )}Resource           \`tfsdk:"${snakeCase(key)}"\`\n`;
         nestedResources +=
-          `\ntype ${camelCase(key)}Resource struct{\n` +
-          buildResource({ schema: value }) +
+          `\ntype ${camelCase(
+            prefix ? prefix + "_" + key : key
+          )}Resource struct{\n` +
+          buildResource({
+            schema: value,
+            prefix: prefix ? prefix + "_" + key : key,
+          }) +
           "\n";
       } else {
         body += `  ${pascalCase(key)}              types.${
           typeMap[value.type]
-        }           \`tfsdk:"${key}"\`\n`;
+        }           \`tfsdk:"${snakeCase(key)}"\`\n`;
       }
     }
   }
@@ -114,6 +130,10 @@ const resourceAnalyzer = ({ resource }) => {
   return resource_schema;
 };
 
+const rootStateMapper = ({ schema }) => {
+  return `vpnSiteListState := vpnSiteListResourceModel{}`;
+};
+
 const stateMapper = ({ schema }) => {
   let body = ``;
   let nestedResources = "";
@@ -136,13 +156,13 @@ ${stateMapper({ schema: value.items })})
 `;
         }
       } else if (value.type === "object") {
-        // body += `  ${pascalCase(key)}              ${camelCase(
-        //   key
-        // )}Resource           \`tfsdk:"${key}"\`\n`;
-        // nestedResources +=
-        //   `\ntype ${camelCase(key)}Resource struct{\n` +
-        //   buildResource({ schema: value }) +
-        //   "\n";
+        body += `state${camelCase(key)}Resource :=  ${camelCase(key)}Resource {
+
+          ${stateMapper({ schema: value })}
+        }`;
+        nestedResources += `vpnSiteListState.${pascalCase(
+          key
+        )} = state${camelCase(key)}Resource;`;
       } else {
         body += `  ${pascalCase(key)}:              types.${
           typeMap[value.type]
@@ -151,7 +171,7 @@ ${stateMapper({ schema: value.items })})
     }
   }
 
-  return body + "}\n" + nestedResources;
+  return body + "\n" + nestedResources;
 };
 
 const createRequestBodyMapper = ({ schema, root = "plan", ending = "" }) => {
@@ -168,12 +188,21 @@ const createRequestBodyMapper = ({ schema, root = "plan", ending = "" }) => {
           nestedResources += `
 
 	var ${camelCase(key)} []map[string]interface{}
-	for _, item := range plan.${pascalCase(key)} {
-		entries = append(entries, map[string]interface{}{
+	for _, item := range plan.${
+    value["$map"]
+      ? value["$map"]
+          .split(".")
+          .map((el) => pascalCase(el))
+          .join(".")
+      : pascalCase(key)
+  } {
+		${camelCase(key)} = append(${camelCase(key)}, map[string]interface{}{
     // doing this will cause issues if there are multiple nested values
-${createRequestBodyMapper({ schema: value.items, root: "item", ending:"," })}
+${createRequestBodyMapper({ schema: value.items, root: "item", ending: "," })}
 		)
 	}
+
+  body["${key}"] = ${camelCase(key)}
 `;
         }
       } else if (value.type === "object") {
@@ -185,16 +214,25 @@ ${createRequestBodyMapper({ schema: value.items, root: "item", ending:"," })}
         //   buildResource({ schema: value }) +
         //   "\n";
       } else {
-        body += `  "${key}":        ${root}.${pascalCase(key)}.Value,\n`;
+        body += `  "${key}":        ${root}.${
+          value["$map"]
+            ? value["$map"]
+                .split(".")
+                .map((el) => pascalCase(el))
+                .join(".")
+            : pascalCase(key)
+        }.Value,\n`;
       }
     }
   }
   return (
-    nestedResources +
-    "\n" +
     (root == "plan" ? `body := map[string]interface{}{\n` : "") +
     body +
-    "}" + ending + '\n'
+    "}" +
+    ending +
+    "\n" +
+    nestedResources +
+    "\n"
   );
 };
 
@@ -219,9 +257,14 @@ const createResponseBodyMapper = ({ schema, root = "plan" }) => {
         //   buildResource({ schema: value }) +
         //   "\n";
       } else {
-        body += `  plan.${pascalCase(
-          key
-        )} = types.String{Value: responseBody["${camelCase(key)}"].(string)}\n`;
+        body += `  plan.${
+          value["$map"]
+            ? value["$map"]
+                .split(".")
+                .map((el) => pascalCase(el))
+                .join(".")
+            : pascalCase(key)
+        } = types.String{Value: responseBody["${camelCase(key)}"].(string)}\n`;
       }
     }
   }
@@ -230,15 +273,13 @@ const createResponseBodyMapper = ({ schema, root = "plan" }) => {
 
 const resourceGenerator = ({ resource_data }) => {};
 
-const createGenerator = ({
-  request_schema,
-  response_schema,
-  path_name,
-  steps,
-}) => {
+const createGenerator = ({ path_name, steps, schema }) => {
   return `
 
-
+func (r *${camelCase(
+    path_name
+  )}Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+}
 func (r *${camelCase(
     path_name
   )}Resource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -252,17 +293,27 @@ func (r *${camelCase(
 
 	// Generate API request body from plan
 
-  ${createRequestBodyMapper({ schema: request_schema })}
 
-  bodyStringed, _ := json.Marshal(&body)
 
   ${steps
     .map((el) => {
-      let body = "";
+      let body = `
+{
+      
+${createRequestBodyMapper({
+  schema: schemaBuilder({ keys: el.requestBody, schema, reverse: true }),
+})}
+
+  bodyStringed, _ := json.Marshal(&body)
+`;
       if (el.preScript) {
-        body += `//pre-script\n`;
+        body += `body = ${pascalCase(el.preScript)}(body, plan)//pre-script\n`;
       }
-      body += `  _, response, err := r.client.${el.sdkPackage}.${el.sdkFunction}(context.Background()).XXSRFTOKEN(token).Body(body).Execute()
+      body += `  _, response, err := r.client.${el.sdkPackage}.${
+        el.sdkFunction
+      }(context.Background())${
+        el.xsrftoken ? ".XXSRFTOKEN(token)" : ""
+      }.Body(body).Execute()
   if err != nil {
 	  fmt.Fprintf(os.Stderr, "Error when calling \`ConfigurationPolicyVPNListBuilderApi.CreatePolicyList39\`: %v\\n", err)
 	  fmt.Fprintf(os.Stderr, "Full HTTP response: %v\\n", r)
@@ -270,12 +321,7 @@ func (r *${camelCase(
       if (el.postScript) {
         body += `  //post-script`;
       }
-      return body;
-    })
-    .join("\n")}
-  
-	
-
+      body += `
 	responseBodyString, _ := ioutil.ReadAll(response.Body)
 	// Create new order
 	if err != nil {
@@ -298,7 +344,17 @@ func (r *${camelCase(
 
 	// Map response body to schema and populate Computed attribute values
 
-${createResponseBodyMapper({ schema: response_schema })}
+${createResponseBodyMapper({
+  schema: schemaBuilder({ keys: el.responseBody, schema, reverse: true }),
+})}
+}`;
+      return body;
+    })
+    .join("\n")}
+  
+	
+
+
 	// Set state to fully populated data
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -335,11 +391,13 @@ func (r *${camelCase(
 ${steps
   .map(
     ({ sdkPackage, sdkFunction, id }) =>
-      `        _, err := r.client.${sdkPackage}.${sdkFunction}(context.Background(), state.${pascalCase(
-        id
-      )}.Value).Execute()`
-  )
-  .join("\n")}
+      `{
+_, err := r.client.${sdkPackage}.${sdkFunction}(context.Background(), state.${id[
+        "$path"
+      ]
+        .split(".")
+        .map((el) => pascalCase(el))
+        .join(".")}.Value).Execute()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error when calling \`ConfigurationPolicyVPNListBuilderApi.DeletePolicyList39\`: %v\\n", err)
 		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\\n", r)
@@ -353,10 +411,15 @@ ${steps
 		return
 	}
 }
+`
+  )
+  .join("\n")}
+
+}
 `;
 };
 
-const readGenerator = ({ schema, path_name }) => {
+const readGenerator = ({ steps, path_name, schema }) => {
   return `
 func (d *${camelCase(
     path_name
@@ -369,8 +432,18 @@ func (d *${camelCase(
 	}
 
 	// Get refreshed order value from HashiCups
-
-	_, r, err := d.client.ConfigurationPolicyVPNListBuilderApi.GetListsById39(context.Background(), state.ListId.Value).Execute()
+//
+ vpnSiteListState := vpnSiteListResourceModel{}
+  ${steps
+    .map(({ sdkPackage, sdkFunction, id, responseBody }) => {
+      return `
+{
+	_, r, err := d.client.${sdkPackage}.${sdkFunction}(context.Background(), state.${id[
+        "$path"
+      ]
+        .split(".")
+        .map((el) => pascalCase(el))
+        .join(".")}.Value).Execute()
 	dataStr, err := ioutil.ReadAll(r.Body)
   fmt.Println(string(dataStr))
 	data := map[string]interface{}{}
@@ -391,8 +464,17 @@ func (d *${camelCase(
 
 	vpnSiteList := data
 
-	vpnSiteListState := vpnSiteListResourceModel{
-    ${stateMapper({ schema })}
+${stateMapper({
+  schema: schemaBuilder({
+    schema,
+    keys: responseBody,
+  }),
+})}
+}`;
+    })
+    .join("\n")}
+
+
 
 
 	state = vpnSiteListState
@@ -419,7 +501,9 @@ const schemaGenerator = ({ schema, path_name, custom_ending }) => {
           // )}              []String           \`tfsdk:"${key}"\`\n`;
         } else {
           body +=
-            `      "${key}": {\n        Description:"",\n        Computed: true,\n        Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
+            `      "${snakeCase(
+              key
+            )}": {\n        Description:"",\n        Computed: false,\n         Optional: true,\n       Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
 \n` +
             "    " +
             schemaGenerator({
@@ -431,15 +515,26 @@ const schemaGenerator = ({ schema, path_name, custom_ending }) => {
         }
       } else if (value.type === "object") {
         body +=
-          `      "${key}": {\n        Description:"",\n        Computed: true,\n        Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
+          `      "${snakeCase(
+            key
+          )}": {\n        Description:"",\n         Optional: true,\n       Computed: false,\n        Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 \n` +
           "    " +
-          schemaGenerator({ schema: value, path_name }) +
-          ",\n";
+          schemaGenerator({
+            schema: value,
+            path_name,
+
+            custom_ending: "}),",
+          }) +
+          "},\n";
       } else {
-        body += `      "${key}": {\n        Description: "",\n        Computed: ${
-          schema?.computed?.includes(key) ? "false" : "true"
-        },\n        Type: types.${typeMap[value.type]},\n      },\n`;
+        body += `      "${snakeCase(
+          key
+        )}": {\n        Description: "",\n        Computed: ${
+          value?.computed ? "true" : "false"
+        },\n      Required: ${
+          value?.computed ? "false" : "true"
+        },\n        Type: types.${typeMap[value.type]}Type,\n      },\n`;
       }
     }
   }
@@ -449,13 +544,89 @@ const schemaGenerator = ({ schema, path_name, custom_ending }) => {
   return body + (custom_ending ? custom_ending : "},\n") + nestedResources;
 };
 
-const schemaBuilder = ({ schema, keys, type = "object" }) => {
-  const new_schema = {};
+const schemaFetcher = ({ path, schema }) => {
+  if (schema[path[0]].type === "object" && schema[path[0]].properties) {
+    const new_path = [...path];
+    new_path.shift();
+    return schemaFetcher({
+      schema: schema[path[0]].properties,
+      path: new_path,
+    });
+  } else if (path.length === 1) {
+    return schema[path[0]];
+  } else {
+    throw new Error("Shit");
+  }
+};
+
+const nestedBlankSchema = ({ schema, path, data }) => {
+  if (path.length == 1) {
+    return { [path[0]]: data };
+  } else if (schema[path[0]].type == "object") {
+    const new_path = [...path];
+    new_path.shift();
+    console.log("DATA: ", data);
+    return {
+      [path[0]]: {
+        type: schema[path[0]].type,
+        computed: data.computed || false,
+        properties: nestedBlankSchema({
+          schema: schema[path[0]].properties,
+          path: new_path,
+          data,
+        }),
+      },
+    };
+  } else {
+    throw new Error("shit");
+  }
+};
+
+const schemaBuilder = ({ schema, keys, type = "object", reverse = false }) => {
+  let new_schema = {};
   for (const key of keys) {
     if (typeof key == "string") {
       new_schema[key] = schema[key];
+    } else if (
+      typeof key == "object" &&
+      Object.keys(key).length == 1 &&
+      Object.keys(key[Object.keys(key)])[0] == "$path"
+    ) {
+      const new_key = Object.keys(key)[0];
+      if (reverse) {
+        new_schema[new_key] = schemaFetcher({
+          path: key[Object.keys(key)[0]]["$path"].split("."),
+          schema,
+        });
+        new_schema[new_key]["$map"] = key[Object.keys(key)[0]]["$path"];
+      } else {
+        const data = schemaFetcher({
+          path: key[new_key]["$path"].split("."),
+          schema,
+        });
+
+        new_schema = _.merge(
+          new_schema,
+          nestedBlankSchema({
+            schema,
+            path: key[new_key]["$path"].split("."),
+            data,
+          })
+        );
+      }
+
+      // new_schema[new_key] = schemaFetcher({ path: key[Object.keys(key)[0]]["$path"].split("."), schema });
     } else if (typeof key == "object") {
       const new_key = Object.keys(key)[0];
+
+      console.log("NEW KEY:", new_key);
+      console.log(key);
+      console.log(
+        schemaFetcher({
+          path: key[new_key]["$path"]?.split(".") || [new_key],
+          schema,
+        })
+      );
 
       new_schema[new_key] = schemaBuilder({
         schema: schema[new_key].items.properties,
@@ -477,6 +648,7 @@ const schemaBuilder = ({ schema, keys, type = "object" }) => {
 };
 
 const generateEndpoint = ({ path_name, api }) => {
+  const scripts = fs.readFileSync(path.resolve(process.env.BASE_DIR, "terraform", "scripts.go"));
   let endpoint = `
 package sdwan
 
@@ -486,8 +658,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"strconv"
-
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -496,6 +666,8 @@ import (
 
 	sdwanAPI "github.com/oshafran/pied-piper-openapi-client-go"
 )
+
+${scripts}
 
 var token string;
 var (
@@ -506,6 +678,14 @@ var (
 
 func New${pascalCase(path_name)}Resource() resource.Resource {
 	return &${path_name}Resource{}
+}
+
+func (d *${path_name}Resource) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
+	}
+
+	d.client = req.ProviderData.(*sdwanAPI.APIClient)
 }
 
 // vpnSiteListsResource is the data source implementation.
@@ -545,44 +725,49 @@ func (d *${camelCase(
 `;
   endpoint += schemaGenerator({ schema: api.schema, path_name }) + "}, nil\n}";
 
-  console.log(api.read.responseBody);
+  // this is temporarily half-assed and will only work for nested objects. Don't have the time to put in a proper solution sadly
   endpoint += readGenerator({
-    schema: schemaBuilder({
-      schema: api.schema.properties,
-      keys: api.read[0].responseBody,
-    }),
+    schema: api.schema.properties,
     path_name,
+    steps: api.read.steps,
   });
 
   endpoint += createGenerator({
-    request_schema: schemaBuilder({
-      schema: api.schema.properties,
-      keys: api.create.initialBody,
-    }),
-    response_schema: schemaBuilder({
-      schema: api.schema.properties,
-      keys: api.create.responseBody,
-    }),
     path_name,
     steps: api.create.steps,
+    schema: api.schema.properties,
   });
 
   // endpoint += updateGenerator({ schema: current_schema, path_name });
   endpoint += deleteGenerator({ steps: api.delete.steps, path_name });
-  console.log(endpoint);
+
   fs.writeFileSync(
-    path.resolve(__dirname, "../terraform_sdk/", `${camelCase(path_name)}.go`),
+    path.resolve(
+      process.env.BASE_DIR,
+      "terraform_sdk/sdwan",
+      `${camelCase(path_name)}.go`
+    ),
     endpoint
   );
 
-  process.exit(0);
+  // if (!fse.existsSync(path.resolve(__dirname, "../terraform_sdk/scripts"))) {
+  //   fs.mkdirSync(path.resolve(__dirname, "../terraform_sdk/scripts"));
+  // }
+  //
+  // fs.copyFileSync(
+  //   path.resolve(__dirname, "scripts.go"),
+  //   path.resolve(__dirname, "../terraform_sdk/scripts/scripts.go")
+  // );
+
+  // process.exit(0);
   // process.exit(0);
 };
 
 const main = () => {
-  const data = YAML.load(path.resolve(__dirname, "./schema.yaml")).endpoints;
+  const data = YAML.load(path.resolve(process.env.BASE_DIR, "terraform", "schema.yaml")).endpoints;
 
-  fse.emptyDirSync(path.resolve(__dirname, "../terraform_sdk/"))
+  fse.ensureDirSync(path.resolve(process.env.BASE_DIR, "terraform_sdk/sdwan"));
+  fse.emptyDirSync(path.resolve(process.env.BASE_DIR, "terraform_sdk/sdwan"));
 
   // const data = yamlToJson(fs.readFileSync(path.resolve(__dirname, "./schema.yaml")).toString(), {})
   for (const api of data) {

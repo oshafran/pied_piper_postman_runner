@@ -6,31 +6,28 @@ const path = require("path");
 
 const Webex = require("webex");
 const p4 = require("./p4");
+const p3 = require("./p3");
+const p5 = require("./p5");
+const p6 = require("./p6");
+
+const yargs = require("yargs/yargs");
+const { hideBin } = require("yargs/helpers");
+const argv = yargs(hideBin(process.argv))
+  .command("generate-terraform", "Generates the sdwan terraform provider")
+  .command("generate-sdk", "Generates go and python sdks")
+  .command("generate-postman", "Generates postman collection")
+  .command("backwards-compatibility", "Validates schema compatibility")
+  .parse();
+
 dotenv.config();
-const webex = Webex.init({
-  credentials: {
-    access_token: process.env.WEBEX_TOKEN,
-  },
-});
 
-const fail = ({ name, message }) => {
-  console.log(`FAILED WHEN RUNNING ${name}\n${message}`);
-  if (process.env.WEBEX_FAILURE_HOOK) {
-    webex.messages.create({
-      text: `**Error in pipeline**
-BUILD URL: ${process.env.CIRCLE_BUILD_URL}
-BRANCH NAME: ${process.env.CIRCLE_BRANCH}
-CIRCLE_JOB: ${process.env.CIRCLE_JOB}
-`,
-      roomId: process.env.WEBEX_ROOM_ID,
-    });
+const default_env_variables = ["VMANAGEIP", "J_USERNAME", "J_PASSWORD"];
+default_env_variables.map((el) => {
+  if (process.env[el] == "" || process.env[el] == undefined) {
+    console.log("SETTING", el);
+    process.env[el] = process.env[`${el}_DEFAULT`];
   }
-
-  // console.log("exiting with error", el);
-  process.exit(1);
-};
-
-// the easiest way to implement this login function is to transform this entire library into an npm package and export the main function. From there, we pass the login function as a paramter in the main function and call it.
+});
 
 const main = async () => {
   if (
@@ -83,13 +80,8 @@ const main = async () => {
   }
 
   console.log(`RUNNER ${process.env.CIRCLE_NODE_INDEX} ACTIVE`);
-  const default_env_variables = ["VMANAGEIP", "J_USERNAME", "J_PASSWORD"]
-  default_env_variables.map((el) => {
-    if(process.env[el] == "" || process.env[el] == undefined) {
-      process.env[el] = process.env[`${el}_DEFAULT`]
-    }
-  })
-  console.log(process.env)
+
+  console.log(process.env);
   if (
     fs.existsSync(path.resolve(process.env.COLLECTIONS_DIR, "info.login.js"))
   ) {
@@ -171,7 +163,7 @@ const main = async () => {
           //
           console.log("SUCCESS: ", el.request.url.path);
         } else {
-          console.log("FAILED: ", el.request.url.path)
+          console.log("FAILED: ", el.request.url.path);
           // temporary removed fail
           // fail({ name: el.item.name, message: "response did not return 200" });
 
@@ -191,9 +183,51 @@ CIRCLE_JOB: ${process.env.CIRCLE_JOB}
         });
         console.log(result);
       }
-      await p4();
+      await p4.main();
+      await p3();
     });
   }
 };
 
-main();
+switch (argv._[0]) {
+  case "generate-terraform":
+    p3();
+    break;
+  case "generate-sdk":
+    p4.main();
+    break;
+  case "generate-postman":
+    p5();
+    break;
+  case "backwards-compatibility":
+    p6();
+    break;
+  case "pipeline1":
+    main();
+  default:
+    main();
+}
+const webex = Webex.init({
+  credentials: {
+    access_token: process.env.WEBEX_TOKEN,
+  },
+});
+
+const fail = ({ name, message }) => {
+  console.log(`FAILED WHEN RUNNING ${name}\n${message}`);
+  if (process.env.WEBEX_FAILURE_HOOK) {
+    webex.messages.create({
+      text: `**Error in pipeline**
+BUILD URL: ${process.env.CIRCLE_BUILD_URL}
+BRANCH NAME: ${process.env.CIRCLE_BRANCH}
+CIRCLE_JOB: ${process.env.CIRCLE_JOB}
+`,
+      roomId: process.env.WEBEX_ROOM_ID,
+    });
+  }
+
+  // console.log("exiting with error", el);
+  process.exit(1);
+};
+
+// the easiest way to implement this login function is to transform this entire library into an npm package and export the main function. From there, we pass the login function as a paramter in the main function and call it.

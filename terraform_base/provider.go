@@ -1,7 +1,3 @@
-const fs = require("fs");
-const path = require("path");
-const generateProvider = () => {
-  const data = `
 package sdwan
 
 import (
@@ -26,13 +22,13 @@ import (
 	sdwanAPI "github.com/oshafran/pied-piper-openapi-client-go"
 )
 
-func auth(client *http.Client) string {
-	apiUrl := "https://44.196.44.132"
+func auth(client *http.Client, host string, username string, password string) string {
+	apiUrl := host 
 	{
 		resource := "/j_security_check"
 		data := url.Values{}
-		data.Set("j_username", "admin")
-		data.Set("j_password", "Fun_Nfvis1")
+		data.Set("j_username", username)
+		data.Set("j_password", password)
 		u, _ := url.ParseRequestURI(apiUrl)
 		u.Path = resource
 		urlStr := u.String()                                                               // "https://api.com/user/"
@@ -42,7 +38,7 @@ func auth(client *http.Client) string {
 		fmt.Println(resp.Status)
 	}
 	{
-		req, err := http.NewRequest("GET", "https://44.196.44.132/dataservice/client/token", nil)
+		req, err := http.NewRequest("GET", fmt.Sprintf("%s/dataservice/client/token", host), nil)
 		if err != nil {
 			panic(err)
 		}
@@ -69,9 +65,9 @@ type sdwanProvider struct{}
 
 // sdwanProviderModel maps provider schema data to a Go type.
 type sdwanProviderModel struct {
-	Host     types.String \`tfsdk:"host"\`
-	Username types.String \`tfsdk:"username"\`
-	Password types.String \`tfsdk:"password"\`
+	Host     types.String `tfsdk:"host"`
+	Username types.String `tfsdk:"username"`
+	Password types.String `tfsdk:"password"`
 }
 
 // Metadata returns the provider type name.
@@ -224,12 +220,12 @@ func (p *sdwanProvider) Configure(ctx context.Context, req provider.ConfigureReq
 	httpClient.Transport = http.DefaultTransport
 	httpClient.Transport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 
-	auth(httpClient)
+	auth(httpClient, host, username, password)
 	// return
 	configuration := sdwanAPI.NewConfiguration()
 	configuration.Servers = sdwanAPI.ServerConfigurations{
 		{
-			URL:         "https://44.196.44.132/dataservice",
+			URL:         fmt.Sprintf("%s/dataservice", host),
 			Description: "No description provided",
 		},
 	}
@@ -264,11 +260,6 @@ func (p *sdwanProvider) DataSources(_ context.Context) []func() datasource.DataS
 // Resources defines the resources implemented in the provider.
 func (p *sdwanProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		NewVPNSiteListResource,
+		NewVpnSiteListResource,
 	}
 }
-`
-  fs.writeFileSync(path.resolve(__dirname, "../terraform_sdk/sdwan/provider.go"), data)
-}
-
-module.exports = generateProvider

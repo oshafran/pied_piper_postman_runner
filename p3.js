@@ -1,4 +1,4 @@
-const terraformGenerator = require("./terraform");
+const terraformGenerator = require("./terraform_base");
 
 const main = () => {
   terraformGenerator()

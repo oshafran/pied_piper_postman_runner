@@ -1,4 +1,4 @@
-FROM node:14-alpine
+FROM node:16-alpine
 WORKDIR /root
 COPY . .
 RUN ls
@@ -13,4 +13,10 @@ RUN git config --global user.name "piedPiperBot"
 RUN npm install @openapitools/openapi-generator-cli -g
 RUN openapi-generator-cli version
 RUN openapi-generator-cli version-manager set 6.1.0
+
+
+COPY --from=golang:1.19-alpine /usr/local/go/ /usr/local/go/
+ 
+ENV PATH="/usr/local/go/bin:${PATH}"
+RUN go version
 CMD ["node", "/root/build.sh"]
