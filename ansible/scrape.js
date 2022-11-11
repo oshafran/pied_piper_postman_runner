@@ -32,6 +32,8 @@ const main = async () => {
     "https://github.com/oshafran/pied-piper-openapi-client-python/tree/main/docs"
   );
 
+  const data = [];
+
   const allowed_packages = parser
     .parse(res.data)
     .querySelectorAll(".css-truncate.css-truncate-target.d-block.width-fit")
@@ -66,48 +68,74 @@ const main = async () => {
         "utf-8"
       )
       .toString();
-    const table_md = res
-      .split("All URIs are relative to *https://1.1.1.1*\n")[1]
-      .split("\n#")[0];
-    const table = (await createMarkdownArrayTable(table_md));
-    console.log(table)
-    for await (const row of table.rows) {
-      console.info("row", row);
-    }
-    // const res = await axios.get(`https://github.com${allowed_package.url}`);
-    const data = parser
-      .parse(res.data)
-      .querySelector("tbody")
-      .toString()
-      .split(/<tr>/)
-      .map((el) => {
-        if (!el.includes("<tbody>")) {
-          const url = el.split("</strong> ")[1].split("</td>")[0];
-          const method = el.split("<td><strong>")[1].split("</strong>")[0];
-          const python_function = el.split("<strong>")[1].split("</strong>")[0];
-          let include = false;
-          let name = `${method}_${python_function}`.toLowerCase();
-          endpoints.map((el) => {
-            if (el.url === url && method == el.method) {
-              include = true;
-              if (el.name) {
-                name = el.name;
-              }
-              // stop map
-              return;
+    try {
+      const table_md = res
+        .split("All URIs are relative to *https://1.1.1.1*\n")[1]
+        .split("\n#")[0];
+      const table = await createMarkdownArrayTable(table_md);
+      for await (const row of table.rows) {
+        const url = row[1].split("** ")[1];
+        const method = row[1].split("**")[1].split("**")[0];
+        console.log(url, method);
+        const python_function = row[0].split("[**")[1].split("**]")[0];
+        let name = `${method}_${python_function}`.toLowerCase();
+
+        let include = false;
+        endpoints.map((el) => {
+          if (el.url === url && method == el.method) {
+            include = true;
+            if (el.name) {
+              name = el.name;
             }
-          });
-          if (include) {
-            return {
-              method,
-              url,
-              python_function,
-              name,
-            };
+            // stop map
+            return;
           }
+        });
+        if (include) {
+          data.push({
+            method,
+            url,
+            python_function,
+            name,
+          });
         }
-      })
-      .filter((el) => el);
+      }
+    } catch (e) {}
+
+    // const res = await axios.get(`https://github.com${allowed_package.url}`);
+    // const data = parser
+    //   .parse(res.data)
+    //   .querySelector("tbody")
+    //   .toString()
+    //   .split(/<tr>/)
+    //   .map((el) => {
+    //     if (!el.includes("<tbody>")) {
+    //       const url = el.split("</strong> ")[1].split("</td>")[0];
+    //       const method = el.split("<td><strong>")[1].split("</strong>")[0];
+    //       const python_function = el.split("<strong>")[1].split("</strong>")[0];
+    //       let include = false;
+    //       let name = `${method}_${python_function}`.toLowerCase();
+    //       endpoints.map((el) => {
+    //         if (el.url === url && method == el.method) {
+    //           include = true;
+    //           if (el.name) {
+    //             name = el.name;
+    //           }
+    //           // stop map
+    //           return;
+    //         }
+    //       });
+    //       if (include) {
+    //         return {
+    //           method,
+    //           url,
+    //           python_function,
+    //           name,
+    //         };
+    //       }
+    //     }
+    //   })
+    //   .filter((el) => el);
 
     for (const item of data) {
       let base = `
