@@ -5,7 +5,7 @@
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 from __future__ import absolute_import, division, print_function
 import openapi_client
-from openapi_client.api import workflow_management_api 
+from openapi_client.api import configuration_policy_site_list_builder_api 
 __metaclass__ = type
 DOCUMENTATION = r"""
 ---
@@ -46,7 +46,7 @@ def run_module():
             "X-XSRF-TOKEN": module.params["x_xsrf_token"],
         }
         try:
-            api_instance = workflow_management_api.WorkflowManagementApi(
+            api_instance = configuration_policy_site_list_builder_api.ConfigurationPolicySiteListBuilderApi(
                 api_client
             )
             # Get  Prefix Template List

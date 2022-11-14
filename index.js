@@ -9,11 +9,13 @@ const p4 = require("./p4");
 const p3 = require("./p3");
 const p5 = require("./p5");
 const p6 = require("./p6");
+const ansible = require("./ansible")
 
 const yargs = require("yargs/yargs");
 const { hideBin } = require("yargs/helpers");
 const argv = yargs(hideBin(process.argv))
   .command("generate-terraform", "Generates the sdwan terraform provider")
+  .command("generate-ansible", "Generates the sdwan ansible modules")
   .command("generate-sdk", "Generates go and python sdks")
   .command("generate-postman", "Generates postman collection")
   .command("backwards-compatibility", "Validates schema compatibility")
@@ -198,6 +200,9 @@ switch (argv._[0]) {
     break;
   case "generate-postman":
     p5();
+    break;
+  case "generate-ansible":
+    ansible().then(() => {}).catch(() => {});
     break;
   case "backwards-compatibility":
     p6();

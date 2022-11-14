@@ -1,0 +1,28 @@
+- name: test my new module
+  connection: local
+  hosts: localhost
+  tasks:
+  - name: login 
+    login:
+      url: "https://url"
+      username: "USER"
+      password: "PASSWORD"
+    register: session
+  - name: dump test output
+    debug:
+      msg: '{{ session }}'
+  - name: create_site 
+    create_site:
+      url: "https://url"
+      body:
+        name: 'hello'
+        description: "this is a description"
+        type: site
+        entries:
+          - siteId: "10"
+      jsessionid: '{{ session.jsessionid }}'
+      x_xsrf_token: '{{ session.x_xsrf_token }}'
+    register: hello
+  - name: dump test output
+    debug:
+      msg: '{{ hello }}'
