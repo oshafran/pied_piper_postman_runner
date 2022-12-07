@@ -69,8 +69,15 @@ const main = () => {
     path.resolve(process.env.BASE_DIR, "terraform_sdk/sdwan/provider.go")
   );
   execSync(`cd terraform_sdk && go mod init terraform-provider-sdwan`);
+
+
   execSync(`cd terraform_sdk && go mod tidy`);
-  // only needed for dev
+  let go_mod_file = fs.readFileSync(path.resolve(process.env.BASE_DIR, "terraform_sdk/go.mod")).toString();
+  go_mod_file = go_mod_file.replace(/github.com\/hashicorp\/terraform-plugin-framework .*/, "github.com/hashicorp/terraform-plugin-framework v0.15.0")
+
+  fs.writeFileSync(path.resolve(process.env.BASE_DIR, "terraform_sdk/go.mod"), go_mod_file);
+  execSync(`cd terraform_sdk && go mod tidy`);
+    // only needed for dev
   if (process.env.NODE_ENV === "development") {
     execSync(`cd terraform_sdk && go install .`);
   }
